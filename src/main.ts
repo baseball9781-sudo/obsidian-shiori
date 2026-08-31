@@ -36,8 +36,13 @@ import {
 	markAsUnread,
 	placeBookmarkAfter,
 } from "./commands";
+import { TargetStore } from "./targets";
+import { installExplorer } from "./explorer";
+import { installStateBar } from "./stateBar";
+import { installReadingQuery } from "./query";
+import { beginBulk } from "./bulk";
 
-interface ReadingTrackerSettings {
+export interface ReadingTrackerSettings {
 	/** 栞表記（SPEC §1） */
 	token: "🔖" | "%%🔖%%";
 	/** Include folders（Codexフェーズで使用） */
@@ -60,17 +65,41 @@ export const STATE_LABEL: Record<ReadingState, string> = {
 
 export default class ReadingTrackerPlugin extends Plugin {
 	settings: ReadingTrackerSettings = DEFAULT_SETTINGS;
+	targets!: TargetStore;
 
 	async onload() {
 		await this.loadSettings();
+		this.targets = new TargetStore(this.app, () => this.settings);
+		this.targets.start((event) => this.registerEvent(event));
 		this.addSettingTab(new ReadingTrackerSettingTab(this.app, this));
+		installExplorer(this, this.app, this.targets);
+		installStateBar(this, this.app, this.targets, (view) => this.jumpToBookmark(view));
+		installReadingQuery(this, this.app, this.targets);
 
 		// --- 山場: Reading Viewの右クリック「ここに栞」 -------------------
 		// 各レンダリング済みセクションにcontextmenuを付け、クリック時に
 		// getSectionInfo()でソース行範囲へ逆引きする。
 		// 注意: getSectionInfo()は再レンダリング後にnullを返すことがある。
 		// その場合は静かに何もしない（コア機能へ例外を伝播させない）。
-		this.registerMarkdownPostProcessor((el, ctx) => {
+		this.registerMarkdownPostProcessor(async (el, ctx) => {
+			// Reading Viewの有効栞を、表記モードにかかわらず区切り線で示す。
+			try {
+				const file = this.app.vault.getFileByPath(ctx.sourcePath);
+				if (file instanceof TFile && await this.targets.state(file) === "reading") {
+					const info = ctx.getSectionInfo(el);
+					const bookmark = effectiveBookmark(await this.app.vault.cachedRead(file));
+					if (info && bookmark && bookmark.line >= info.lineStart && bookmark.line <= info.lineEnd && !el.querySelector(".reading-tracker-divider")) {
+						const divider = document.createElement("div");
+						divider.className = "reading-tracker-divider";
+						divider.textContent = "ここまで読んだ";
+						const visibleToken = Array.from(el.querySelectorAll<HTMLElement>("p, li, div")).find((node) => node.textContent?.trim() === "🔖");
+						if (visibleToken) visibleToken.replaceWith(divider);
+						else el.append(divider);
+					}
+				}
+			} catch (e) {
+				console.error("[reading-tracker] divider failed", e);
+			}
 			el.addEventListener("contextmenu", (evt: MouseEvent) => {
 				try {
 					// テキスト選択中はコピー等の既定動作を優先
@@ -180,6 +209,16 @@ export default class ReadingTrackerPlugin extends Plugin {
 				return true;
 			},
 		});
+		this.addCommand({
+			id: "bulk-mark-folder-read",
+			name: "フォルダを一括既読にする",
+			callback: () => beginBulk(this.app, this.targets, this.settings.token, "read"),
+		});
+		this.addCommand({
+			id: "bulk-mark-folder-unread",
+			name: "フォルダを一括未読にする",
+			callback: () => beginBulk(this.app, this.targets, this.settings.token, "unread"),
+		});
 	}
 
 	/** 栞を置いて結果をNoticeで知らせる */
@@ -203,7 +242,7 @@ export default class ReadingTrackerPlugin extends Plugin {
 	}
 
 	/** 栞の行へスクロール（書き込みなし） */
-	private async jumpToBookmark(view: MarkdownView) {
+	async jumpToBookmark(view: MarkdownView) {
 		const file = view.file;
 		if (!file) return;
 		const content = await this.app.vault.cachedRead(file);
@@ -321,5 +360,42 @@ class ReadingTrackerSettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 					}),
 			);
+
+		this.addPathEditor("Include folders", "対象にするフォルダ（Vaultルートからのパス）", "includeFolders");
+		this.addPathEditor("Exclude paths", "対象外にするフォルダまたはファイル", "excludePaths");
+
+		if (this.plugin.settings.includeFolders.length) {
+			containerEl.createEl("h3", { text: "対象件数" });
+			for (const folder of this.plugin.settings.includeFolders) {
+				const root = folder.replace(/^\/+|\/+$/g, "");
+				const count = this.app.vault.getMarkdownFiles().filter((file) =>
+					(!root || file.path.startsWith(`${root}/`)) && this.plugin.targets.isTarget(file),
+				).length;
+				containerEl.createEl("div", { text: `${folder || "/"}：${count}件が対象` });
+			}
+		}
+	}
+
+	private addPathEditor(name: string, description: string, key: "includeFolders" | "excludePaths"): void {
+		let value = "";
+		new Setting(this.containerEl).setName(name).setDesc(description)
+			.addText((text) => text.setPlaceholder("Research/").onChange((next) => { value = next.trim(); }))
+			.addButton((button) => button.setButtonText("追加").onClick(async () => {
+				const normalized = value.replace(/^\/+|\/+$/g, "");
+				if (value && !this.plugin.settings[key].includes(normalized)) {
+					this.plugin.settings[key].push(normalized);
+					await this.plugin.saveSettings();
+					this.plugin.targets.invalidateAll();
+					this.display();
+				}
+			}));
+		for (const path of this.plugin.settings[key]) {
+			new Setting(this.containerEl).setName(path || "/").addButton((button) => button.setButtonText("削除").setWarning().onClick(async () => {
+				this.plugin.settings[key] = this.plugin.settings[key].filter((item) => item !== path);
+				await this.plugin.saveSettings();
+				this.plugin.targets.invalidateAll();
+				this.display();
+			}));
+		}
 	}
 }

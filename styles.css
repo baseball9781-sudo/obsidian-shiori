@@ -1,0 +1,47 @@
+/* Reading Tracker */
+
+/* File Explorer装飾（Codexフェーズ: data-reading-state を付与して使う） */
+.nav-file-title[data-reading-state="unread"] .nav-file-title-content::before {
+	content: "○ ";
+	color: var(--text-muted);
+}
+.nav-file-title[data-reading-state="reading"] .nav-file-title-content::before {
+	content: "◐ ";
+	color: var(--text-accent);
+}
+.nav-file-title[data-reading-state="read"] .nav-file-title-content::before {
+	content: "● ";
+	color: var(--text-faint);
+}
+
+/* 「ここまで読んだ」ライン（Codexフェーズ） */
+.reading-tracker-divider {
+	display: flex;
+	align-items: center;
+	gap: 0.75em;
+	color: var(--text-faint);
+	font-size: 0.85em;
+	margin: 1em 0;
+	user-select: none;
+}
+.reading-tracker-divider::before,
+.reading-tracker-divider::after {
+	content: "";
+	flex: 1;
+	border-top: 1px dashed var(--text-faint);
+}
+
+/* ノート上部の状態UI（Codexフェーズ） */
+.reading-tracker-state {
+	display: inline-block;
+	font-size: var(--font-ui-small);
+	color: var(--text-muted);
+	padding: 2px 8px;
+	border-radius: var(--radius-s);
+	background: var(--background-secondary);
+	cursor: default;
+	margin: 4px 0;
+}
+.reading-tracker-state.is-reading {
+	cursor: pointer;
+}

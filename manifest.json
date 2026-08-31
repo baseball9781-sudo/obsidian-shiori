@@ -1,0 +1,9 @@
+{
+	"id": "reading-tracker",
+	"name": "Reading Tracker",
+	"version": "0.1.0",
+	"minAppVersion": "1.5.0",
+	"description": "○/◐/● reading state for notes, driven by a 🔖 bookmark in the Markdown body.",
+	"author": "kudoumasaya",
+	"isDesktopOnly": false
+}

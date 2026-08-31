@@ -230,10 +230,15 @@ export default class ReadingTrackerPlugin extends Plugin {
 				afterLine,
 				this.settings.token,
 			);
-			new Notice(
+			const base =
 				state === "read"
 					? `● 最後まで読んだ → 既読になりました`
-					: `◐ ここまで読んだ → 続きは栞から`,
+					: `◐ ここまで読んだ → 続きは栞から`;
+			// 対象外ノートだと栞は入るがUIに何も出ないので、理由を添える
+			new Notice(
+				this.targets.isTarget(file)
+					? base
+					: `${base}\n※このノートは追跡対象外です（Include foldersに含まれていません）`,
 			);
 		} catch (e) {
 			console.error("[reading-tracker] placeAt failed", e);

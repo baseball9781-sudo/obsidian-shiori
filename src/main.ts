@@ -83,14 +83,16 @@ export default class ReadingTrackerPlugin extends Plugin {
 					const file = this.app.vault.getFileByPath(ctx.sourcePath);
 					if (!(file instanceof TFile)) return;
 
+					// 「その場」= クリックした行。逆引きできなければ段落末尾
+					const line =
+						resolveClickedLine(evt, info) ?? info.lineEnd;
+
 					const menu = new Menu();
 					menu.addItem((item) =>
 						item
 							.setTitle("ここに栞")
 							.setIcon("bookmark")
-							.onClick(() =>
-								this.placeAt(file, info.lineEnd),
-							),
+							.onClick(() => this.placeAt(file, line)),
 					);
 					menu.showAtMouseEvent(evt);
 				} catch (e) {
@@ -189,7 +191,11 @@ export default class ReadingTrackerPlugin extends Plugin {
 				afterLine,
 				this.settings.token,
 			);
-			new Notice(`栞を置きました → ${STATE_LABEL[state]}`);
+			new Notice(
+				state === "read"
+					? `● 最後まで読んだ → 既読になりました`
+					: `◐ ここまで読んだ → 続きは栞から`,
+			);
 		} catch (e) {
 			console.error("[reading-tracker] placeAt failed", e);
 			new Notice("栞を置けませんでした（コンソール参照）");
@@ -230,6 +236,61 @@ export default class ReadingTrackerPlugin extends Plugin {
 
 	async saveSettings() {
 		await this.saveData(this.settings);
+	}
+}
+
+/**
+ * Reading Viewで右クリックされた位置のソース行を逆引きする。
+ *
+ * 描画後のHTMLには行情報が無いため、クリック座標の文字列
+ * （caretRangeFromPoint→周辺テキスト）をセクションのソース行から探す。
+ * 装飾（**bold**等）をまたぐと一致しないことがあるので、
+ * 全文→先頭10文字→最長単語、の順で緩めて探す。
+ * 見つからなければnull（呼び出し側が段落末尾にフォールバック）。
+ */
+function resolveClickedLine(
+	evt: MouseEvent,
+	info: { text: string; lineStart: number; lineEnd: number },
+): number | null {
+	try {
+		let probe = "";
+		const doc = document as Document & {
+			caretRangeFromPoint?: (x: number, y: number) => Range | null;
+		};
+		const range = doc.caretRangeFromPoint?.(evt.clientX, evt.clientY);
+		if (range && range.startContainer.nodeType === Node.TEXT_NODE) {
+			const t = range.startContainer.textContent ?? "";
+			const off = range.startOffset;
+			probe = t.slice(Math.max(0, off - 15), off + 15).trim();
+		}
+		if (!probe) {
+			const blk = (evt.target as HTMLElement | null)?.closest(
+				"li, p, h1, h2, h3, h4, h5, h6, td, th",
+			);
+			probe = (blk?.textContent ?? "").trim().slice(0, 30);
+		}
+		if (!probe) return null;
+
+		const lines = info.text.split("\n");
+		// 同じ文字列が複数行にあれば後ろの行を優先（読み進み方向）
+		const findFrom = (needle: string): number | null => {
+			if (needle.length < 3) return null;
+			for (let i = info.lineEnd; i >= info.lineStart; i--) {
+				if (lines[i]?.includes(needle)) return i;
+			}
+			return null;
+		};
+
+		const longestWord = probe
+			.split(/[\s、。・,.]+/)
+			.sort((a, b) => b.length - a.length)[0] ?? "";
+		return (
+			findFrom(probe) ??
+			findFrom(probe.slice(0, 10)) ??
+			findFrom(longestWord)
+		);
+	} catch {
+		return null;
 	}
 }
 

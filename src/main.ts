@@ -16,7 +16,7 @@
  */
 import {
 	App,
-	Editor,
+	MarkdownPostProcessorContext,
 	MarkdownView,
 	Menu,
 	Notice,
@@ -66,6 +66,11 @@ export const STATE_LABEL: Record<ReadingState, string> = {
 export default class ReadingTrackerPlugin extends Plugin {
 	settings: ReadingTrackerSettings = DEFAULT_SETTINGS;
 	targets!: TargetStore;
+	/** Reading Viewのホットキー用: レンダリング済みセクションの逆引き台帳 */
+	private sections: {
+		el: HTMLElement;
+		ctx: MarkdownPostProcessorContext;
+	}[] = [];
 
 	async onload() {
 		await this.loadSettings();
@@ -100,6 +105,12 @@ export default class ReadingTrackerPlugin extends Plugin {
 			} catch (e) {
 				console.error("[reading-tracker] divider failed", e);
 			}
+			// ホットキー「ここに栞」の位置特定用に登録（切断済みは随時掃除）
+			this.sections.push({ el, ctx });
+			if (this.sections.length > 2000) {
+				this.sections = this.sections.filter((s) => s.el.isConnected);
+			}
+
 			el.addEventListener("contextmenu", (evt: MouseEvent) => {
 				try {
 					// テキスト選択中はコピー等の既定動作を優先
@@ -151,9 +162,31 @@ export default class ReadingTrackerPlugin extends Plugin {
 		this.addCommand({
 			id: "place-bookmark-here",
 			name: "ここに栞",
-			editorCallback: (editor: Editor, ctx) => {
-				if (ctx.file)
-					void this.placeAt(ctx.file, editor.getCursor().line);
+			hotkeys: [{ modifiers: ["Mod", "Shift"], key: "b" }],
+			checkCallback: (checking) => {
+				const view =
+					this.app.workspace.getActiveViewOfType(MarkdownView);
+				if (!view?.file) return false;
+				if (!checking) {
+					if (view.getMode() === "source") {
+						// 編集画面・ライブプレビュー: カーソル行の直後
+						void this.placeAt(
+							view.file,
+							view.editor.getCursor().line,
+						);
+					} else {
+						// Reading View: 画面に見えている最後のセクションの直後
+						const line = this.visibleBottomLine(view);
+						if (line === null) {
+							new Notice(
+								"栞位置を特定できませんでした（少しスクロールして再試行）",
+							);
+						} else {
+							void this.placeAt(view.file, line);
+						}
+					}
+				}
+				return true;
 			},
 		});
 		this.addCommand({
@@ -243,6 +276,33 @@ export default class ReadingTrackerPlugin extends Plugin {
 		} catch (e) {
 			console.error("[reading-tracker] placeAt failed", e);
 			new Notice("栞を置けませんでした（コンソール参照）");
+		}
+	}
+
+	/**
+	 * Reading Viewで現在画面内に見えているセクションのうち、
+	 * 最も後ろのもののソース末尾行を返す（＝「ここまで読んだ」位置）。
+	 * 特定できなければnull。
+	 */
+	private visibleBottomLine(view: MarkdownView): number | null {
+		try {
+			const viewport = view.contentEl.getBoundingClientRect();
+			this.sections = this.sections.filter((s) => s.el.isConnected);
+			let best: number | null = null;
+			for (const { el, ctx } of this.sections) {
+				if (ctx.sourcePath !== view.file?.path) continue;
+				const r = el.getBoundingClientRect();
+				// 一部でも画面内に見えているセクションだけ対象
+				if (r.top >= viewport.bottom || r.bottom <= viewport.top)
+					continue;
+				const info = ctx.getSectionInfo(el);
+				if (!info) continue;
+				if (best === null || info.lineEnd > best) best = info.lineEnd;
+			}
+			return best;
+		} catch (e) {
+			console.error("[reading-tracker] visibleBottomLine failed", e);
+			return null;
 		}
 	}
 

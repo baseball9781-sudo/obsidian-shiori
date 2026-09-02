@@ -1,7 +1,7 @@
 {
 	"id": "shiori",
 	"name": "Shiori",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"minAppVersion": "1.5.0",
 	"description": "Track the reading state of notes (unread ○ / reading ◐ / read ●) with a 🔖 bookmark in the Markdown body. Made for AI-generated note pipelines.",
 	"author": "kudoumasaya",

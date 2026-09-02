@@ -38,7 +38,7 @@ Everything else is derived from that. Delete the plugin's cache and nothing is l
 
 | Command | Action |
 |---|---|
-| ここに栞 (Place bookmark here) | Editor: after cursor line. Reading View: after last visible paragraph. Default hotkey `Cmd/Ctrl+Shift+B` |
+| ここに栞 (Place bookmark here) | Editor: after cursor line. Reading View: after last visible paragraph. Recommended hotkey: `Cmd/Ctrl+Shift+B` (assign in Settings → Hotkeys) |
 | 栞へ移動 (Jump to bookmark) | Scroll to the bookmark |
 | 読了にする (Mark as read) | Move bookmark to end of file |
 | 未読に戻す (Mark as unread) | Remove bookmarks |

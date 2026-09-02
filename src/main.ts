@@ -162,7 +162,8 @@ export default class ReadingTrackerPlugin extends Plugin {
 		this.addCommand({
 			id: "place-bookmark-here",
 			name: "ここに栞",
-			hotkeys: [{ modifiers: ["Mod", "Shift"], key: "b" }],
+			// デフォルトホットキーは公式ガイドラインにより設定しない
+			// （ユーザ各自が 設定→ホットキー で割り当てる。推奨: Cmd/Ctrl+Shift+B）
 			checkCallback: (checking) => {
 				const view =
 					this.app.workspace.getActiveViewOfType(MarkdownView);

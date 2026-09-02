@@ -1,9 +1,10 @@
 {
-	"id": "reading-tracker",
-	"name": "Reading Tracker",
+	"id": "shiori",
+	"name": "Shiori",
 	"version": "0.1.0",
 	"minAppVersion": "1.5.0",
-	"description": "○/◐/● reading state for notes, driven by a 🔖 bookmark in the Markdown body.",
+	"description": "Track the reading state of notes (unread ○ / reading ◐ / read ●) with a 🔖 bookmark in the Markdown body. Made for AI-generated note pipelines.",
 	"author": "kudoumasaya",
+	"authorUrl": "https://github.com/baseball9781-sudo",
 	"isDesktopOnly": false
 }

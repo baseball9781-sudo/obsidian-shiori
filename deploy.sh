@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 cd "$(dirname "$0")"
-DEST="$HOME/Documents/MainVault/.obsidian/plugins/reading-tracker"
+DEST="$HOME/Documents/MainVault/.obsidian/plugins/shiori"
 ./verify.sh >/dev/null
 mkdir -p "$DEST"
 cp manifest.json main.js styles.css "$DEST/"
